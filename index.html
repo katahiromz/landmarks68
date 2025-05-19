@@ -2,10 +2,10 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>face-api.js - 68 ランドマークのリアルタイム描画</title>
+  <title>高速 face-api.js 顔ランドマーク描画</title>
   <script src="face-api.min.js"></script>
   <style>
-    canvas, video {
+    video, canvas {
       position: absolute;
       top: 0;
       left: 0;
@@ -13,8 +13,8 @@
   </style>
 </head>
 <body>
-  <video id="video" width="720" height="560" autoplay muted></video>
-  <canvas id="overlay" width="720" height="560"></canvas>
+  <video id="video" width="480" height="360" autoplay muted></video>
+  <canvas id="overlay" width="480" height="360"></canvas>
 
   <script>
     const video = document.getElementById('video');
@@ -22,37 +22,41 @@
     const ctx = canvas.getContext('2d');
 
     async function start() {
-      // モデルをロード
+      // 軽量モデルのみをロード
       await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
       await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models');
 
-      // カメラ開始
-      navigator.mediaDevices.getUserMedia({ video: {} })
-        .then(stream => video.srcObject = stream)
-        .catch(err => console.error("カメラの起動に失敗:", err));
+      // 小さめ解像度でWebカメラ起動
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 400, height: 300 }
+      });
+      video.srcObject = stream;
 
       video.addEventListener('play', () => {
         const displaySize = { width: video.width, height: video.height };
         faceapi.matchDimensions(canvas, displaySize);
 
-        setInterval(async () => {
-          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+        const runDetection = async () => {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 }))
             .withFaceLandmarks(true);
 
           const resized = faceapi.resizeResults(detections, displaySize);
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          resized.forEach(result => {
-            const landmarks = result.landmarks;
-            const points = landmarks.positions;
-            points.forEach(point => {
-              ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
+          for (const detection of resized) {
+            const points = detection.landmarks.positions;
+            for (const point of points) {
+              ctx.fillStyle = 'lime';
               ctx.beginPath();
               ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
               ctx.fill();
-            });
-          });
-        }, 100);
+            }
+          }
+
+          requestAnimationFrame(runDetection); // 毎フレーム呼び出し
+        };
+
+        runDetection(); // 開始
       });
     }
 
