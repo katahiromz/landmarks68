@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>face-api.js - 68 ランドマークのリアルタイム描画</title>
+  <script src="face-api.min.js"></script>
+  <style>
+    canvas, video {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <video id="video" width="720" height="560" autoplay muted></video>
+  <canvas id="overlay" width="720" height="560"></canvas>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+
+    async function start() {
+      // モデルをロード
+      await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+      await faceapi.nets.faceLandmark68TinyNet.loadFromUri('./models');
+
+      // カメラ開始
+      navigator.mediaDevices.getUserMedia({ video: {} })
+        .then(stream => video.srcObject = stream)
+        .catch(err => console.error("カメラの起動に失敗:", err));
+
+      video.addEventListener('play', () => {
+        const displaySize = { width: video.width, height: video.height };
+        faceapi.matchDimensions(canvas, displaySize);
+
+        setInterval(async () => {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks(true);
+
+          const resized = faceapi.resizeResults(detections, displaySize);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          resized.forEach(result => {
+            const landmarks = result.landmarks;
+            const points = landmarks.positions;
+            points.forEach(point => {
+              ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
+              ctx.beginPath();
+              ctx.arc(point.x, point.y, 2, 0, 2 * Math.PI);
+              ctx.fill();
+            });
+          });
+        }, 100);
+      });
+    }
+
+    start();
+  </script>
+</body>
+</html>
